@@ -1,22 +1,24 @@
 import os
 import asyncio
 
-import discord
+import discord  # pip install discord.py
 from dotenv import load_dotenv
 from discord.ext import commands
 from discord import app_commands
 
-from langchain import OpenAI
-
-from ogbujipt.config import openai_emulation
+from ogbujipt import config
+from ogbujipt.prompting import format, ALPACA_INSTRUCT_DELIMITERS
+from ogbujipt.async_helper import schedule_openai_call, openai_api_surrogate
+from ogbujipt import oapi_choice1_text
+from ogbujipt.text_helper import text_splitter
+from ogbujipt.embedding_helper import qdrant_collection
 
 load_dotenv()  # From .env file
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-PERMISSIONS_INTEGER = int(os.getenv('PERMISSIONS_INTEGER'))
+#PERMISSIONS_INTEGER = int(os.getenv('PERMISSIONS_INTEGER'))
 
 LLM_HOST = os.getenv('LLM_HOST')
 LLM_PORT = os.getenv('LLM_PORT')
-LLM_TEMP = os.getenv('LLM_TEMP')
 
 # Enable all standard intents, plus message content
 # The bot app you set up on Discord will require this intent (Bot tab)
@@ -111,41 +113,47 @@ async def player_debuff(
         name: str, 
         player_debuff: float, 
         ):
-        global boss_list
+    global boss_list
 
-        await interaction.response.defer()
+    await interaction.response.defer()
 
-        await interaction.edit_original_response(
-            content=f'`Modifying {boss_list[name].name} `'
-            )
-        
-        await interaction.channel.send(
-            f'{boss_list[name].name} started with attacks '\
-            f'{str(boss_list[name].attack1)}, '\
-            f'{str(boss_list[name].attack2)}, and '\
-            f'{str(boss_list[name].attack3)}'
-            )
+    await interaction.edit_original_response(
+        content=f'`Modifying {boss_list[name].name} `'
+        )
+    
+    await interaction.channel.send(
+        f'{boss_list[name].name} started with attacks '\
+        f'{str(boss_list[name].attack1)}, '\
+        f'{str(boss_list[name].attack2)}, and '\
+        f'{str(boss_list[name].attack3)}'
+        )
 
-        boss_list[name].multiply_attack1(player_debuff)
+    boss_list[name].multiply_attack1(player_debuff)
 
-        await interaction.channel.send(
-            f'{boss_list[name].name} now has attacks '\
-            f'{str(boss_list[name].attack1)}, '\
-            f'{str(boss_list[name].attack2)}, and '\
-            f'{str(boss_list[name].attack3)}'
-            )
+    await interaction.channel.send(
+        f'{boss_list[name].name} now has attacks '\
+        f'{str(boss_list[name].attack1)}, '\
+        f'{str(boss_list[name].attack2)}, and '\
+        f'{str(boss_list[name].attack3)}'
+        )
 
 
   
 def main():
-    global llm  # Ick! Ideally should be better scope/context controlled
-
-    # Set up API connector
-    openai_emulation(host=LLM_HOST, port=LLM_PORT)
-    llm = OpenAI(temperature=LLM_TEMP)
+    openai_key = False
+    # Use OpenAI API if specified, otherwise emulate with supplied host, etc.
+    if openai_key:
+        assert not (LLM_HOST or LLM_PORT), 'Don\'t use LLM_HOST or LLM_PORT with OPENAI'
+        model = model or 'text-davinci-003'
+        openai_api = config.openai_live(
+            model=model, debug=True)
+    else:
+        openai_api = config.openai_emulation(
+            host=LLM_HOST, port=LLM_PORT, model='SOFOLOID', debug=True)
 
     # launch Discord client event loop
     asyncio.get_event_loop().create_task(bot.run(token=DISCORD_TOKEN))
+    print('and now, AI')
 
 
 if __name__ == '__main__':
